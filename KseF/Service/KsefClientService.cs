@@ -1,73 +1,201 @@
-﻿using System.Net.Http;
+﻿using System.Net.Http.Headers;
+using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text;
+using System.Xml;
 
 namespace KseF.Service
     {
-    public class KsefClientService(string apiUrl, string nip)
-        {
-        private readonly string _apiUrl = apiUrl;
-        private readonly string _nip = nip;
-        private static readonly HttpClient _httpClient = new HttpClient();
+    using System;
+    using System.Collections.Generic;
+    using System.IO;
+    using System.Net.Http;
+    using System.Security.Cryptography;
+    using System.Text;
+    using System.Text.Json;
+    using System.Threading.Tasks;
+    using System.Xml;
 
-        public async Task<Dictionary<string, object>> GetChallengeAndTimestampAsync()
+    public class KSeFClientService : IKSeFClientService
+        {
+        private readonly string apiUrl;
+        private readonly string nip;
+        private readonly string apiKey;
+        private readonly string publicKeyPath;
+        private string sessionToken;
+        private readonly HttpClient httpClient;
+
+        public KSeFClientService(string apiUrl, string nip, string apiKey, string publicKeyPath)
             {
-            string url = $"{_apiUrl}/online/Session/AuthorisationChallenge";
-            var data = new
+            this.apiUrl = apiUrl;
+            this.nip = nip;
+            this.apiKey = apiKey;
+            this.publicKeyPath = publicKeyPath;
+            httpClient = new HttpClient();
+            }
+
+        private async Task<HttpResponseMessage> SendRequestAsync(string url, string data, HttpMethod method, Dictionary<string, string> headers = null)
+            {
+            using var request = new HttpRequestMessage(method, url)
+                {
+                Content = data != null ? new StringContent(data, Encoding.UTF8, "application/json") : null
+                };
+
+            if (headers != null)
+                {
+                foreach (var header in headers)
+                    {
+                    request.Headers.TryAddWithoutValidation(header.Key, header.Value);
+                    }
+                }
+
+            return await httpClient.SendAsync(request);
+            }
+
+        public async Task<dynamic> GetChallengeAndTimestampAsync()
+            {
+            var url = $"{apiUrl}/online/Session/AuthorisationChallenge";
+            var data = JsonSerializer.Serialize(new
                 {
                 contextIdentifier = new
                     {
                     type = "onip",
-                    identifier = _nip
+                    identifier = nip
                     }
-                };
+                });
 
-            string jsonData = JsonSerializer.Serialize(data);
-            var headers = new[]
-            {
-            "Content-Type: application/json",
-            "Accept: application/json"
+            var headers = new Dictionary<string, string>
+        {
+            { "Content-Type", "application/json" },
+            { "Accept", "application/json" }
         };
 
-            var (response, httpCode) = await SendRequestAsync(url, jsonData, headers, "POST");
+            var response = await SendRequestAsync(url, data, HttpMethod.Post, headers);
+            if (response.IsSuccessStatusCode)
+                {
+                var responseContent = await response.Content.ReadAsStringAsync();
+                return JsonSerializer.Deserialize<dynamic>(responseContent);
+                }
 
-            if (httpCode == 201)
-                {
-                return JsonSerializer.Deserialize<Dictionary<string, object>>(response);
-                }
-            else
-                {
-                throw new Exception($"Błąd w uzyskiwaniu challenge: {response}");
-                }
+            throw new Exception($"Error getting challenge: {response.StatusCode}");
             }
 
-        private async Task<(string response, int httpCode)> SendRequestAsync(string url, string data, string[] headers, string method = "POST")
+        public string EncryptToken(string token, string challengeTimeMillis)
             {
-            HttpRequestMessage request = new HttpRequestMessage
-                {
-                Method = new HttpMethod(method),
-                RequestUri = new Uri(url)
-                };
-
-            if (!string.IsNullOrEmpty(data))
-                {
-                request.Content = new StringContent(data, Encoding.UTF8, "application/json");
-                }
-
-            foreach (var header in headers)
-                {
-                var headerParts = header.Split(new[] { ':' }, 2);
-                if (headerParts.Length == 2)
-                    {
-                    request.Headers.TryAddWithoutValidation(headerParts[0].Trim(), headerParts[1].Trim());
-                }
+            var dataToEncrypt = Encoding.UTF8.GetBytes($"{token}|{challengeTimeMillis}");
+            var publicKey = File.ReadAllText(publicKeyPath);
+            using var rsa = RSA.Create();
+            rsa.ImportFromPem(publicKey);
+            var encryptedData = rsa.Encrypt(dataToEncrypt, RSAEncryptionPadding.Pkcs1);
+            return Convert.ToBase64String(encryptedData);
             }
 
-            HttpResponseMessage response = await _httpClient.SendAsync(request);
-            string responseBody = await response.Content.ReadAsStringAsync();
-            int httpCode = (int)response.StatusCode;
+        public async Task<string> GetKSeFSessionTokenAsync(string encryptedToken, string challenge)
+            {
+            var doc = new XmlDocument();
+            var root = doc.CreateElement("ns3", "InitSessionTokenRequest", "http://ksef.mf.gov.pl/schema/gtw/svc/online/auth/request/2021/10/01/0001");
+            doc.AppendChild(root);
 
-            return (responseBody, httpCode);
+            var context = doc.CreateElement("ns3", "Context", root.NamespaceURI);
+            root.AppendChild(context);
+
+            var challengeElement = doc.CreateElement("ns4", "Challenge", "http://ksef.mf.gov.pl/schema/gtw/svc/online/types/2021/10/01/0001");
+            challengeElement.InnerText = challenge;
+            context.AppendChild(challengeElement);
+
+            var identifier = doc.CreateElement("ns4", "Identifier", challengeElement.NamespaceURI);
+            identifier.SetAttribute("xsi:type", "ns2:SubjectIdentifierByCompanyType");
+            var identifierValue = doc.CreateElement("ns2", "Identifier", "http://ksef.mf.gov.pl/schema/gtw/svc/types/2021/10/01/0001");
+            identifierValue.InnerText = nip;
+            identifier.AppendChild(identifierValue);
+            context.AppendChild(identifier);
+
+            var tokenElement = doc.CreateElement("ns4", "Token", challengeElement.NamespaceURI);
+            tokenElement.InnerText = encryptedToken.Trim();
+            context.AppendChild(tokenElement);
+
+            var url = $"{apiUrl}/online/Session/InitToken";
+            var headers = new Dictionary<string, string>
+        {
+            { "Content-Type", "application/xml" }
+        };
+
+            var response = await SendRequestAsync(url, doc.OuterXml, HttpMethod.Post, headers);
+            if (response.IsSuccessStatusCode)
+                {
+                var responseContent = await response.Content.ReadAsStringAsync();
+                sessionToken = JsonSerializer.Deserialize<dynamic>(responseContent).sessionToken.token;
+                return sessionToken;
+                }
+
+            throw new Exception($"Error getting session token: {response.StatusCode}");
+            }
+
+        public async Task<dynamic> SendInvoiceAsync(string invoiceFile)
+            {
+            if (!File.Exists(invoiceFile))
+                {
+                throw new FileNotFoundException($"Invoice file not found: {invoiceFile}");
+                }
+
+            var invoiceData = File.ReadAllBytes(invoiceFile);
+            var hashSHA = Convert.ToBase64String(SHA256.HashData(invoiceData));
+            var invoiceBody = Convert.ToBase64String(invoiceData);
+            var fileSize = new FileInfo(invoiceFile).Length;
+
+            var body = JsonSerializer.Serialize(new
+                {
+                invoiceHash = new
+                    {
+                    fileSize,
+                    hashSHA = new
+                        {
+                        algorithm = "SHA-256",
+                        encoding = "Base64",
+                        value = hashSHA
+                        }
+                    },
+                invoicePayload = new
+                    {
+                    type = "plain",
+                    invoiceBody
+                    }
+                });
+
+            var headers = new Dictionary<string, string>
+        {
+            { "Accept", "application/json" },
+            { "SessionToken", sessionToken },
+            { "Content-Type", "application/json" }
+        };
+
+            var response = await SendRequestAsync($"{apiUrl}/online/Invoice/Send", body, HttpMethod.Put, headers);
+            if (response.IsSuccessStatusCode)
+                {
+                var responseContent = await response.Content.ReadAsStringAsync();
+                return JsonSerializer.Deserialize<dynamic>(responseContent);
+                }
+
+            throw new Exception($"Error sending invoice: {response.StatusCode}");
+            }
+
+        public async Task TerminateSessionAsync()
+            {
+            var url = $"{apiUrl}/online/Session/Terminate";
+            var headers = new Dictionary<string, string>
+        {
+            { "Accept", "application/json" },
+            { "SessionToken", sessionToken }
+        };
+
+            var response = await SendRequestAsync(url, null, HttpMethod.Get, headers);
+            if (!response.IsSuccessStatusCode)
+                {
+                throw new Exception($"Error terminating session: {response.StatusCode}");
+                }
+
+            Console.WriteLine("Session terminated successfully.");
             }
         }
+
     }
