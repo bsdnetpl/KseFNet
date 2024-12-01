@@ -148,6 +148,7 @@ dotnet run
 Testowanie API
 
 Możesz użyć narzędzi takich jak Postman, Curl lub Insomnia do testowania punktów końcowych API.
+
 Licencja
 
 Projekt jest udostępniany na licencji MIT.
