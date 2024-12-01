@@ -29,7 +29,7 @@ namespace KseF.Controllers
 
             string apiKey = !string.IsNullOrWhiteSpace(config.ApiKey)
                 ? config.ApiKey
-                : "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx";
+                : "xxxxxxxx";
 
             string publicKeyPath = !string.IsNullOrWhiteSpace(config.PublicKeyPath)
                 ? config.PublicKeyPath
