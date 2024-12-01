@@ -6,16 +6,6 @@ using System.Xml;
 
 namespace KseF.Service
     {
-    using System;
-    using System.Collections.Generic;
-    using System.IO;
-    using System.Net.Http;
-    using System.Security.Cryptography;
-    using System.Text;
-    using System.Text.Json;
-    using System.Threading.Tasks;
-    using System.Xml;
-
     public class KSeFClientService : IKSeFClientService
         {
         private readonly string apiUrl;
