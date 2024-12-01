@@ -151,6 +151,7 @@ Możesz użyć narzędzi takich jak Postman, Curl lub Insomnia do testowania pun
 Licencja
 
 Projekt jest udostępniany na licencji MIT.
+
 Wkład
 
 Zapraszamy do zgłaszania problemów i składania próśb o nowe funkcje poprzez system zgłoszeń GitHub. Pull requesty są mile widziane!
