@@ -1,67 +1,69 @@
-KSeFClientService - Integracja z Krajowym Systemem e-Faktur (KSeF)
-Opis projektu
+KSeFClientService – Integracja z Krajowym Systemem e-Faktur (KSeF)
+📌 Opis projektu
 
-KSeFClientService to implementacja serwisu oraz kontrolera REST API umożliwiającego integrację z Krajowym Systemem e-Faktur (KSeF). Klasa obsługuje proces uwierzytelniania, przesyłania faktur oraz zarządzania sesją w systemie KSeF.
+KSeFClientService to implementacja serwisu oraz kontrolera REST API umożliwiająca integrację z Krajowym Systemem e-Faktur (KSeF). Klasa obsługuje proces uwierzytelniania w trybie FA(3), przesyłania faktur oraz zarządzania sesją.
 
-Projekt został zaprojektowany zgodnie z zasadami architektury warstwowej oraz wykorzystuje ASP.NET Core jako podstawę aplikacji.
-Funkcjonalności
+Projekt został zaprojektowany zgodnie z zasadami architektury warstwowej i oparty na technologii ASP.NET Core.
+✅ Funkcjonalności
 
 Serwis obsługuje następujące operacje:
 
-    Pobieranie wyzwania (Challenge) i czasu (Timestamp):
-        Umożliwia pobranie informacji wymaganych do uwierzytelnienia w KSeF.
+    Pobieranie wyzwania (Challenge) i czasu (Timestamp)
+    Uzyskuje dane wymagane do uwierzytelnienia w KSeF.
 
-    Szyfrowanie tokenu:
-        Realizuje szyfrowanie tokenu przy użyciu klucza publicznego w formacie PEM.
+    Szyfrowanie tokenu
+    Realizowane przy użyciu klucza publicznego w formacie PEM i algorytmu RSA.
 
-    Uzyskanie tokenu sesji:
-        Generuje token sesji niezbędny do przesyłania faktur.
+    Uzyskanie tokenu sesji (FA(3))
+    Generuje token sesji, niezbędny do przesyłania faktur.
 
-    Przesyłanie faktury:
-        Wysyła fakturę w formacie XML do systemu KSeF.
+    Przesyłanie faktury
+    Wysyła fakturę w formacie XML do systemu KSeF.
 
-    Zamykanie sesji:
-        Kończy aktywną sesję w KSeF.
+    Zamykanie sesji
+    Kończy aktywną sesję w KSeF.
 
-Wymagania systemowe
+🖥️ Wymagania systemowe
 
     .NET 6 lub nowszy
+
     ASP.NET Core
-    Klucz publiczny w formacie PEM
-    Faktury w formacie XML
 
-Struktura projektu
+    Klucz publiczny Ministerstwa Finansów w formacie PEM
 
-    IKSeFClientService:
-        Interfejs definiujący metody serwisu, m.in. szyfrowanie tokenu, uzyskanie tokenu sesji, wysyłanie faktur.
-    KSeFClientService:
-        Implementacja serwisu komunikującego się z KSeF.
-    KSeFController:
-        Kontroler REST API umożliwiający dostęp do funkcji serwisu przez HTTP.
+    Faktury w formacie XML (zgodne z KSeF)
 
-Instalacja i konfiguracja
+🧱 Struktura projektu
 
-    Klonowanie repozytorium:
+    IKSeFClientService
+    Interfejs definiujący metody serwisu, takie jak: szyfrowanie tokenu, uzyskanie tokenu sesji, przesyłanie faktur, itp.
 
-git clone https://github.com/your-username/KSeFClientService.git
+    KSeFClientService
+    Implementacja interfejsu, odpowiedzialna za komunikację z API KSeF.
+
+    KSeFController
+    Kontroler REST API umożliwiający dostęp do metod serwisu przez HTTP.
+
+⚙️ Instalacja i konfiguracja
+1. Klonowanie repozytorium
+
+git clone https://github.com/bsdnetpl/KSeFClientService.git
 cd KSeFClientService
 
-Dodanie klucza publicznego:
+2. Dodanie klucza publicznego
 
-    Umieść plik klucza publicznego w formacie PEM w katalogu projektu i zaktualizuj jego ścieżkę w konfiguracji serwisu.
+Umieść plik klucza publicznego (publicKey.pem) w katalogu projektu i zaktualizuj jego ścieżkę w konfiguracji serwisu (np. przez DI lub appsettings.json).
+3. Dodanie pliku faktury
 
-Dodanie pliku faktury:
+Upewnij się, że plik faktury w formacie XML znajduje się w systemie plików i podaj jego ścieżkę w żądaniu.
+4. Uruchomienie aplikacji
 
-    Upewnij się, że faktura jest dostępna w formacie XML i zaktualizuj jej ścieżkę w żądaniach API.
+dotnet run
 
-Uruchomienie aplikacji:
+📡 Przykłady użycia API
+1. Pobieranie Challenge i Timestamp
 
-    dotnet run
-
-Przykłady użycia API
-1. Pobieranie wyzwania (Challenge) i czasu (Timestamp)
-
-Endpoint: GET /api/ksef/challenge
+    Endpoint: GET /api/ksef/challenge
 
 Przykład odpowiedzi:
 
@@ -72,7 +74,7 @@ Przykład odpowiedzi:
 
 2. Szyfrowanie tokenu
 
-Endpoint: POST /api/ksef/encrypt-token
+    Endpoint: POST /api/ksef/encrypt-token
 
 Przykład żądania:
 
@@ -89,7 +91,7 @@ Przykład odpowiedzi:
 
 3. Uzyskanie tokenu sesji
 
-Endpoint: POST /api/ksef/session-token
+    Endpoint: POST /api/ksef/session-token
 
 Przykład żądania:
 
@@ -106,7 +108,7 @@ Przykład odpowiedzi:
 
 4. Wysyłanie faktury
 
-Endpoint: POST /api/ksef/send-invoice
+    Endpoint: POST /api/ksef/send-invoice
 
 Przykład żądania:
 
@@ -123,7 +125,7 @@ Przykład odpowiedzi:
 
 5. Zamykanie sesji
 
-Endpoint: POST /api/ksef/terminate-session
+    Endpoint: POST /api/ksef/terminate-session
 
 Przykład odpowiedzi:
 
@@ -131,28 +133,34 @@ Przykład odpowiedzi:
   "message": "Session terminated successfully."
 }
 
-Konfiguracja w kodzie
-
-Zarejestruj serwis w Program.cs:
+🧩 Konfiguracja w kodzie
+1. Rejestracja serwisu w Program.cs
 
 builder.Services.AddScoped<IKSeFClientService, KSeFClientService>();
 
-Zmapuj kontroler:
+2. Mapowanie kontrolera
 
 app.MapControllers();
 
-Uruchom aplikację:
+🧪 Testowanie API
 
-dotnet run
+Do testowania możesz użyć narzędzi takich jak:
 
-Testowanie API
+    Postman
 
-Możesz użyć narzędzi takich jak Postman, Curl lub Insomnia do testowania punktów końcowych API.
+    curl
 
-Licencja
+    Insomnia
 
-Projekt jest udostępniany na licencji MIT.
+📝 Licencja
 
-Wkład
+Projekt dostępny na licencji MIT. Szczegóły znajdziesz w pliku LICENSE.
+🤝 Wkład
 
-Zapraszamy do zgłaszania problemów i składania próśb o nowe funkcje poprzez system zgłoszeń GitHub. Pull requesty są mile widziane!
+Chcesz pomóc? Super!
+
+    Otwórz zgłoszenie (Issue) w GitHubie
+
+    Dodaj Pull Request
+
+    Zgłoś propozycję nowych funkcji lub poprawek
